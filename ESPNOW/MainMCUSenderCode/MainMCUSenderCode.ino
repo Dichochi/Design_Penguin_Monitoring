@@ -83,18 +83,26 @@ void loop() {
   strcpy(myData.RFID, "ID1285");
   myData.Weight = float_value;
 
-  
+  int error=0;
   // Send message via ESP-NOW
    if (flag) {
   esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
    
   if (result == ESP_OK) {
     Serial.println("Sending confirmed");
+    flag=false;
   }
   else {
-    Serial.println("Sending error");
+    if(error>1){
+     Serial.println("Sending error");
+     flag=false;  
+     error=0;   
+    }
+    else{
+      delay(8000);
+      error+=1;
+    }
   }
-  flag=false;
    }
   delay(2000);
 }

@@ -24,6 +24,7 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
+
 // define the number of bytes you want to access
 #define EEPROM_SIZE 1
 
@@ -57,6 +58,22 @@ typedef struct struct_message {
 // Create a structured object
 struct_message myData;
 
+const char* ssid = "PeakStudios";
+const char* password = "";
+
+void switchToESPNow() {
+  // Disconnect Wi-Fi
+  WiFi.disconnect(true);  // Disconnect from current Wi-Fi and erase config
+  delay(100);
+  WiFi.mode(WIFI_STA);    // Set to Station mode
+  delay(100);
+
+  // Re-initialize ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+}
 void captureAndSaveImage(){
 camera_fb_t * fb = NULL;
   
@@ -112,6 +129,23 @@ void OnDataRecv(const esp_now_recv_info_t *info, const uint8_t *incomingData, in
   Serial.println(myData.Weight);
   Serial.println();
 captureAndSaveImage();
+  esp_now_deinit();
+  Serial.println("ESP-NOW Deinitialized");
+
+  // Reconnect Wi-Fi
+  WiFi.disconnect(true); // Fully reset Wi-Fi
+  delay(100);
+  WiFi.begin(ssid, password);
+
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWi-Fi connected.");
+
+  // TODO: Call function to upload image here
+  switchToESPNow();
 }
 
 void setup() {
@@ -174,16 +208,20 @@ void setup() {
   }
 
    // Set ESP32 as a Wi-Fi Station
-  WiFi.mode(WIFI_STA);
+WiFi.mode(WIFI_STA);
     // Initilize ESP-NOW
   if (esp_now_init() != ESP_OK) {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
+
+
+
  // Register callback function
   esp_now_register_recv_cb(OnDataRecv);
     
 }
+
 
 void loop() {
   
