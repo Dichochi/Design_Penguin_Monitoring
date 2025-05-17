@@ -20,35 +20,36 @@
 #include "soc/soc.h"           // Disable brownour problems
 #include "soc/rtc_cntl_reg.h"  // Disable brownour problems
 #include "driver/rtc_io.h"
-#include <EEPROM.h>            // read and write from flash memory
+#include <EEPROM.h>  // read and write from flash memory
 #include <esp_now.h>
 #include <WiFi.h>
-
+#include <time.h>
 
 // define the number of bytes you want to access
 #define EEPROM_SIZE 1
 
 // Pin definition for CAMERA_MODEL_AI_THINKER
-#define PWDN_GPIO_NUM     32
-#define RESET_GPIO_NUM    -1
-#define XCLK_GPIO_NUM      0
-#define SIOD_GPIO_NUM     26
-#define SIOC_GPIO_NUM     27
+#define PWDN_GPIO_NUM 32
+#define RESET_GPIO_NUM -1
+#define XCLK_GPIO_NUM 0
+#define SIOD_GPIO_NUM 26
+#define SIOC_GPIO_NUM 27
 
-#define Y9_GPIO_NUM       35
-#define Y8_GPIO_NUM       34
-#define Y7_GPIO_NUM       39
-#define Y6_GPIO_NUM       36
-#define Y5_GPIO_NUM       21
-#define Y4_GPIO_NUM       19
-#define Y3_GPIO_NUM       18
-#define Y2_GPIO_NUM        5
-#define VSYNC_GPIO_NUM    25
-#define HREF_GPIO_NUM     23
-#define PCLK_GPIO_NUM     22
+#define Y9_GPIO_NUM 35
+#define Y8_GPIO_NUM 34
+#define Y7_GPIO_NUM 39
+#define Y6_GPIO_NUM 36
+#define Y5_GPIO_NUM 21
+#define Y4_GPIO_NUM 19
+#define Y3_GPIO_NUM 18
+#define Y2_GPIO_NUM 5
+#define VSYNC_GPIO_NUM 25
+#define HREF_GPIO_NUM 23
+#define PCLK_GPIO_NUM 22
 
 int pictureNumber = 0;
-
+volatile bool dataReceived = false;
+volatile bool TakeImage = false;
 // Define a data structure
 typedef struct struct_message {
   char RFID[32];
@@ -58,28 +59,41 @@ typedef struct struct_message {
 // Create a structured object
 struct_message myData;
 
-const char* ssid = "PeakStudios";
-const char* password = "";
+const char* ssid = "SITHOKOMELE";
+const char* password = "ESPTEST1";
+unsigned long epochTime;
 
-void switchToESPNow() {
-  // Disconnect Wi-Fi
-  WiFi.disconnect(true);  // Disconnect from current Wi-Fi and erase config
-  delay(100);
-  WiFi.mode(WIFI_STA);    // Set to Station mode
-  delay(100);
+void TransferToServer() {
+  const char* host = "192.168.137.52";
+  const int httpPort = 8000;
+  WiFiClient client;
 
-  // Re-initialize ESP-NOW
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
-    return;
+  if (client.connect(host, httpPort)) {
+    Serial.println("Connected to test server");
+    client.println("GET /get HTTP/1.1");
+    client.println("Host: 1.1.1.1");
+    client.println("Connection: close");
+    client.println();
+  } else {
+    Serial.println("Connection to test server failed");
   }
 }
-void captureAndSaveImage(){
-camera_fb_t * fb = NULL;
-  
+unsigned long getTime() {
+  time_t now;
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    //Serial.println("Failed to obtain time");
+    return (0);
+  }
+  time(&now);
+  return now;
+}
+void captureAndSaveImage() {
+  camera_fb_t* fb = NULL;
+
   // Take Picture with Camera
-  fb = esp_camera_fb_get();  
-  if(!fb) {
+  fb = esp_camera_fb_get();
+  if (!fb) {
     Serial.println("Camera capture failed");
     return;
   }
@@ -88,38 +102,37 @@ camera_fb_t * fb = NULL;
   pictureNumber = EEPROM.read(0) + 1;
 
   // Path where new picture will be saved in SD Card
-  String path = "/picture" + String(pictureNumber) +".jpg";
+  configTime(0, 0, "pool.ntp.org");
 
-  fs::FS &fs = SD_MMC; 
+
+  epochTime = getTime();
+  String path = "/p" + String(epochTime) + ".jpg";
+  SD_MMC.begin();
+  fs::FS& fs = SD_MMC;
+
+  Serial.print("Epoch Time: ");
+  Serial.println(epochTime);
   Serial.printf("Picture file name: %s\n", path.c_str());
-  
+
   File file = fs.open(path.c_str(), FILE_WRITE);
-  if(!file){
+  if (!file) {
     Serial.println("Failed to open file in writing mode");
-  } 
-  else {
-    file.write(fb->buf, fb->len); // payload (image), payload length
+  } else {
+    file.write(fb->buf, fb->len);  // payload (image), payload length
     Serial.printf("Saved file to path: %s\n", path.c_str());
     EEPROM.write(0, pictureNumber);
     EEPROM.commit();
   }
   file.close();
-  esp_camera_fb_return(fb); 
-  
+  esp_camera_fb_return(fb);
+
   // Turns off the ESP32-CAM white on-board LED (flash) connected to GPIO 4
   pinMode(4, OUTPUT);
-digitalWrite(4, HIGH);
-delay(100);  // Flash on
-digitalWrite(4, LOW);  // Flash off
-
- // rtc_gpio_hold_en(GPIO_NUM_4);
-  //delay(2000);
-  //Serial.println("Going to sleep now");
-  //delay(2000);
-  //esp_deep_sleep_start();
-  //Serial.println("This will never be printed");
+  digitalWrite(4, HIGH);
+  delay(50);             // Flash on
+  digitalWrite(4, LOW);  // Flash off
 }
-void OnDataRecv(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len) {
+void OnDataRecv(const esp_now_recv_info_t* info, const uint8_t* incomingData, int len) {
   memcpy(&myData, incomingData, sizeof(myData));
   Serial.print("Data received: ");
   Serial.println(len);
@@ -128,34 +141,23 @@ void OnDataRecv(const esp_now_recv_info_t *info, const uint8_t *incomingData, in
   Serial.print("Weight Value: ");
   Serial.println(myData.Weight);
   Serial.println();
-captureAndSaveImage();
-  esp_now_deinit();
-  Serial.println("ESP-NOW Deinitialized");
+  if (strcmp(myData.RFID, "IMAGE") == 0) {
+    Serial.println("Image Capture Triggered");
+    TakeImage = true;
 
-  // Reconnect Wi-Fi
-  WiFi.disconnect(true); // Fully reset Wi-Fi
-  delay(100);
-  WiFi.begin(ssid, password);
-
-  Serial.print("Connecting to Wi-Fi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  } else {
+    dataReceived = true;
   }
-  Serial.println("\nWi-Fi connected.");
-
-  // TODO: Call function to upload image here
-  switchToESPNow();
 }
 
 void setup() {
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
- 
-  Serial.begin(115200);
-   
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);  //disable brownout detector
+
+  Serial.begin(9600);
+
   //Serial.setDebugOutput(true);
   //Serial.println();
-  
+
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -176,10 +178,10 @@ void setup() {
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
-  config.pixel_format = PIXFORMAT_JPEG; 
-  
-  if(psramFound()){
-    config.frame_size = FRAMESIZE_UXGA; // FRAMESIZE_ + QVGA|CIF|VGA|SVGA|XGA|SXGA|UXGA
+  config.pixel_format = PIXFORMAT_JPEG;
+
+  if (psramFound()) {
+    config.frame_size = FRAMESIZE_UXGA;  // FRAMESIZE_ + QVGA|CIF|VGA|SVGA|XGA|SXGA|UXGA
     config.jpeg_quality = 10;
     config.fb_count = 2;
   } else {
@@ -187,42 +189,61 @@ void setup() {
     config.jpeg_quality = 12;
     config.fb_count = 1;
   }
-  
+
   // Init Camera
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
     Serial.printf("Camera init failed with error 0x%x", err);
     return;
   }
-  
+
   //Serial.println("Starting SD Card");
-  if(!SD_MMC.begin()){
+  if (!SD_MMC.begin()) {
     Serial.println("SD Card Mount Failed");
     return;
   }
-  
+
   uint8_t cardType = SD_MMC.cardType();
-  if(cardType == CARD_NONE){
+  if (cardType == CARD_NONE) {
     Serial.println("No SD Card attached");
     return;
   }
 
-   // Set ESP32 as a Wi-Fi Station
-WiFi.mode(WIFI_STA);
-    // Initilize ESP-NOW
+  // Set the device as a Station and Soft Access Point simultaneously
+  WiFi.mode(WIFI_AP_STA);
+
+  // Set device as a Wi-Fi Station
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Setting as a Wi-Fi Station..");
+  }
+  Serial.print("Station IP Address: ");
+  Serial.println(WiFi.localIP());
+  Serial.print("Wi-Fi Channel: ");
+  Serial.println(WiFi.channel());
+
+  // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
 
-
-
- // Register callback function
-  esp_now_register_recv_cb(OnDataRecv);
-    
+  // Once ESPNow is successfully Init, we will register for recv CB to
+  // get recv packer info
+  esp_now_register_recv_cb((OnDataRecv));
 }
 
 
 void loop() {
+  if (TakeImage) {
+    TakeImage = false;
+    captureAndSaveImage();
+  }
   
+  if (dataReceived)
+  {
+    dataReceived = false;  // clear the flag
+    TransferToServer();
+  }
 }
