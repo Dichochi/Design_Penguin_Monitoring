@@ -29,7 +29,7 @@ HardwareSerial mySerial(2);
 //EC:E3:34:C0:A3:78
 
 // Insert your SSID
-constexpr char WIFI_SSID[] = "SITHOKOMELE";
+constexpr char WIFI_SSID[] = "MULWELI";
 
 // Define a data structure
 typedef struct struct_message {
@@ -159,7 +159,7 @@ void setup() {
   RFIDUARTSetup();
   DistanceSensorSetup();
   flagCapture = true;
-  startMillis=millis();
+  startMillis = millis();
 }
 
 void loop() {
@@ -179,47 +179,53 @@ void loop() {
   strcpy(myData.RFID, "");
   myData.Weight = 0;
 
- unsigned long startTime = millis();  // Start timer
+  unsigned long startTime = millis();  // Start timer
+  if (!flagCapture) {
+    while (1) {
+      // Break after 120 seconds
+      if (millis() - startTime > 10000) {
+        Serial.println("Timeout reached: exiting loop.");
+        break;
+      }
 
-  while (1) {
-    // Break after 120 seconds
-    if (millis() - startTime > 10000) {
-      Serial.println("Timeout reached: exiting loop.");
-      break;
+      // Try reading RFID
+      String RFIDReading = readRFID();
+
+      RFIDReading.trim();
+      if (RFIDReading.length() >= 8) {
+        strcpy(myData.RFID, RFIDReading.c_str());
+      }
+
+      // Try reading weight
+      float Weight = getWeight();
+      if (Weight > 0) {
+        myData.Weight = Weight;
+        break;  // Exit the loop early once weight is received
+      }
+
+      delay(100);  // Small delay to avoid hammering sensors
     }
-
-    // Try reading RFID
-    String RFIDReading = readRFID();
-
-    RFIDReading.trim();
-    if (RFIDReading.length() >=8 ) {
-      strcpy(myData.RFID, RFIDReading.c_str());
-    }
-
-    // Try reading weight
-    float Weight = getWeight();
-    if (Weight > 0) {
-      myData.Weight = Weight;
-      break;  // Exit the loop early once weight is received
-    }
-
-    delay(100);  // Small delay to avoid hammering sensors
   }
+
 
   // Send data (RFID + Weight) to camera
-  if((flagCapture==false) && myData.Weight==0)
-  {
-//strcpy(myData.RFID, "IMAGEONLY"); // Commented for testing only 
- SendDataToCamera();
+  if ((flagCapture == false) && myData.Weight == 0) {
+    //strcpy(myData.RFID, "IMAGEONLY"); // Commented for testing only
+    SendDataToCamera();
   }
 
-  if((flagCapture==false) && myData.Weight>0){
-     SendDataToCamera();
+  if ((flagCapture == false) && myData.Weight > 0) {
+    SendDataToCamera();
   }
+
+
+
+  delay(1000);  // Optional: give ESP some breathing time
+  if (distance <= 30) {
+    distance= getDistance();
     if (distance > 30) {
-    flagCapture = true;
+      flagCapture = true;
+      delay(40);
+    }
   }
- 
-
-  delay(100);  // Optional: give ESP some breathing time
 }

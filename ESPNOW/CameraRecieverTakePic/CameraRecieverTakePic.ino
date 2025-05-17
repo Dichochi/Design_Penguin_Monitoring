@@ -24,6 +24,8 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <time.h>
+#include <HTTPClient.h>
+#include <SPIFFS.h>  // Or use SD.h if you're reading from SD card
 
 // define the number of bytes you want to access
 #define EEPROM_SIZE 1
@@ -50,6 +52,7 @@
 int pictureNumber = 0;
 volatile bool dataReceived = false;
 volatile bool TakeImage = false;
+ String ImagePath;
 // Define a data structure
 typedef struct struct_message {
   char RFID[32];
@@ -59,24 +62,66 @@ typedef struct struct_message {
 // Create a structured object
 struct_message myData;
 
-const char* ssid = "SITHOKOMELE";
+const char* ssid = "MULWELI";
 const char* password = "ESPTEST1";
 unsigned long epochTime;
 
 void TransferToServer() {
-  const char* host = "192.168.137.52";
+  const char* serverUrl = "http://192.168.137.163:8000/add/";
+  //const char* host = "192.168.137.52";
   const int httpPort = 8000;
-  WiFiClient client;
+  //--------------------------------------------------
+  epochTime = getTime();
+  //SD_MMC.begin(true);  // Or SD.begin()
+  HTTPClient http;
 
-  if (client.connect(host, httpPort)) {
-    Serial.println("Connected to test server");
-    client.println("GET /get HTTP/1.1");
-    client.println("Host: 1.1.1.1");
-    client.println("Connection: close");
-    client.println();
-  } else {
-    Serial.println("Connection to test server failed");
+  String boundary = "----ESP32FormBoundary";
+  //String jsonPart = "{\"name\":\"ESP32\",\"status\":\"OK\"}";
+
+  String ID = (strcmp(myData.RFID, "") == 0)? "null":myData.RFID;
+
+  String jsonPart = "{\"timestamp\": " + String(epochTime) + ", \"id\": " +  ID+
+  ", \"weight\": " + String(myData.Weight) + "}";
+
+
+  // Begin request
+  http.begin(serverUrl);
+  http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+
+  // Start building multipart body
+  String bodyStart = "--" + boundary + "\r\n";
+  bodyStart += "Content-Disposition: form-data; name=\"data\"\r\n";
+  bodyStart += "Content-Type: application/json\r\n\r\n";
+  bodyStart += jsonPart + "\r\n";
+
+  // Prepare image part
+  String imageHeader = "--" + boundary + "\r\n";
+  imageHeader += "Content-Disposition: form-data; name=\"picture\"; filename="+ImagePath +"\r\n";
+  imageHeader += "Content-Type: image/jpeg\r\n\r\n";
+
+  String bodyEnd = "\r\n--" + boundary + "--\r\n";
+
+  // Open image file (replace with camera buffer if needed)
+ // File imageFile = SPIFFS.open("/photo.jpg", "r");  // Or SD.open()
+ Serial.println(ImagePath);
+ SD_MMC.begin();
+  fs::FS& fs = SD_MMC;
+  File imageFile = fs.open(ImagePath.c_str(), FILE_READ);
+
+if (!imageFile || imageFile.isDirectory()) {
+  Serial.println("Failed to open image: " + ImagePath);
+} else {
+  Serial.println("Opened image: " + ImagePath);
+   //Now imageFile can be used (e.g., streamed for HTTP POST)
+}
+
+  if (!imageFile) {
+    Serial.println("Failed to open image file");
+    return;
   }
+  int httpResponseCode = http.POST(bodyStart+imageHeader+bodyEnd);
+imageFile.close();
+  
 }
 unsigned long getTime() {
   time_t now;
@@ -101,25 +146,22 @@ void captureAndSaveImage() {
   EEPROM.begin(EEPROM_SIZE);
   pictureNumber = EEPROM.read(0) + 1;
 
-  // Path where new picture will be saved in SD Card
-  configTime(0, 0, "pool.ntp.org");
-
 
   epochTime = getTime();
-  String path = "/p" + String(epochTime) + ".jpg";
+  ImagePath = "/p" + String(epochTime) + ".jpg";
   SD_MMC.begin();
   fs::FS& fs = SD_MMC;
 
   Serial.print("Epoch Time: ");
   Serial.println(epochTime);
-  Serial.printf("Picture file name: %s\n", path.c_str());
+  Serial.printf("Picture file name: %s\n", ImagePath.c_str());
 
-  File file = fs.open(path.c_str(), FILE_WRITE);
+  File file = fs.open(ImagePath.c_str(), FILE_WRITE);
   if (!file) {
     Serial.println("Failed to open file in writing mode");
   } else {
     file.write(fb->buf, fb->len);  // payload (image), payload length
-    Serial.printf("Saved file to path: %s\n", path.c_str());
+    Serial.printf("Saved file to path: %s\n", ImagePath.c_str());
     EEPROM.write(0, pictureNumber);
     EEPROM.commit();
   }
@@ -218,11 +260,12 @@ void setup() {
     delay(1000);
     Serial.println("Setting as a Wi-Fi Station..");
   }
+
   Serial.print("Station IP Address: ");
   Serial.println(WiFi.localIP());
   Serial.print("Wi-Fi Channel: ");
   Serial.println(WiFi.channel());
-
+  configTime(0, 0, "pool.ntp.org");
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
     Serial.println("Error initializing ESP-NOW");
@@ -240,9 +283,8 @@ void loop() {
     TakeImage = false;
     captureAndSaveImage();
   }
-  
-  if (dataReceived)
-  {
+
+  if (dataReceived) {
     dataReceived = false;  // clear the flag
     TransferToServer();
   }
