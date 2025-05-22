@@ -12,10 +12,26 @@
 #include <esp_wifi.h>
 #include <WiFi.h>
 #include <Wire.h>
+#include "HX711.h"
 #define echoPin 2  // CHANGE PIN NUMBER HERE IF YOU WANT TO USE A DIFFERENT PIN
 #define trigPin 4  // CHANGE PIN NUMBER HERE IF YOU WANT TO USE A DIFFERENT PIN
 #define TXD1 19
 #define RXD1 21
+#define SCK 25
+#define DT1 33
+#define DT2 32
+#define DT3 34
+#define DT4 35
+#define SCALE_FACTOR_1 427.772// calibration factors reading over known mass
+#define SCALE_FACTOR_2 422.633
+#define SCALE_FACTOR_3 428.811
+#define SCALE_FACTOR_4 445.3465
+HX711 scale1;
+HX711 scale2;
+HX711 scale3;
+HX711 scale4;
+
+
 long duration, distance;
 volatile bool flagCapture;
 unsigned long startMillis;  //some global variables available anywhere in the program
@@ -105,6 +121,31 @@ void DistanceSensorSetup() {
   pinMode(echoPin, INPUT);
 }
 
+void ScaleSetup(){
+scale1.begin(DT1, SCK);
+  scale2.begin(DT2, SCK);
+  scale3.begin(DT3, SCK);
+  scale4.begin(DT4, SCK);
+
+  while (!scale1.is_ready() || !scale2.is_ready() || !scale3.is_ready() || !scale4.is_ready()) {
+    Serial.println("Waiting for HX711 modules...");
+    delay(500);
+  }
+    
+  scale1.tare();
+  scale2.tare();
+  scale3.tare();
+  scale4.tare();
+
+  scale1.set_scale(SCALE_FACTOR_1); // reading over known mass
+  scale2.set_scale(SCALE_FACTOR_2);
+  scale3.set_scale(SCALE_FACTOR_3);
+  scale4.set_scale(SCALE_FACTOR_4);
+
+
+  Serial.println("All scales tared and calibrated. Ready for measurements in grams.");
+}
+
 
 // Callback function called when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
@@ -144,8 +185,21 @@ long getDistance() {
 }
 
 
-float getWeight() {
-  return 0;
+void  getWeight() {
+  float weight1 = scale1.get_units(3);
+  float weight2 = scale2.get_units(3);
+  float weight3 = scale3.get_units(3);
+  float weight4 = scale4.get_units(3);
+
+  float totalWeight = weight1 + weight2 + weight3 + weight4;
+
+  //Serial.print("Weight1: "); Serial.print(weight1, 2); Serial.print(" g\t");
+  //Serial.print("Weight2: "); Serial.print(weight2, 2); Serial.print(" g\t");
+  //Serial.print("Weight3: "); Serial.print(weight3, 2); Serial.print(" g\t");
+  //Serial.print("Weight4: "); Serial.print(weight4, 2); Serial.print(" g\t");
+  //Serial.print(" | Total Weight: ");
+  Serial.println(totalWeight, 2);
+  //Serial.println(" g");
 }
 void SendSignalCaptureImage() {
   strcpy(myData.RFID, "IMAGE");
@@ -155,9 +209,10 @@ void SendSignalCaptureImage() {
 
 void setup() {
   Serial.begin(115200);
-  WifiESPNOWSetup();
+  //WifiESPNOWSetup();
   RFIDUARTSetup();
   DistanceSensorSetup();
+  ScaleSetup();
   flagCapture = true;
   startMillis = millis();
 }
@@ -165,67 +220,70 @@ void setup() {
 void loop() {
   // Check if something is within 30 cm and flag is true
   long distance = getDistance();
-  Serial.println("Distance: " + String(distance));
+  //Serial.println("Distance: " + String(distance));
 
-  if (distance <= 30 && flagCapture == true) {
-    flagCapture = false;
-    SendSignalCaptureImage();
-  }
+  //if (distance <= 30 && flagCapture == true) {
+    //flagCapture = false;
+    //SendSignalCaptureImage();
+  //}
 
   // Reset flag when space is clear
 
 
   // Reset data
-  strcpy(myData.RFID, "");
-  myData.Weight = 0;
+  //strcpy(myData.RFID, "");
+ getWeight();
 
-  unsigned long startTime = millis();  // Start timer
-  if (!flagCapture) {
-    while (1) {
-      // Break after 120 seconds
-      if (millis() - startTime > 10000) {
-        Serial.println("Timeout reached: exiting loop.");
-        break;
-      }
+  // unsigned long startTime = millis();  // Start timer
+  // if (!flagCapture) {
+  //   while (1) {
+  //     // Break after 120 seconds
+  //     if (millis() - startTime > 10000) {
+  //       Serial.println("Timeout reached: exiting loop.");
+  //       break;
+  //     }
 
-      // Try reading RFID
-      String RFIDReading = readRFID();
+  //     // Try reading RFID
+  //     String RFIDReading = readRFID();
 
-      RFIDReading.trim();
-      if (RFIDReading.length() >= 8) {
-        strcpy(myData.RFID, RFIDReading.c_str());
-      }
+  //     RFIDReading.trim();
+  //     if (RFIDReading.length() >= 8) {
+  //       strcpy(myData.RFID, RFIDReading.c_str());
+  //     }
 
-      // Try reading weight
-      float Weight = getWeight();
-      if (Weight > 0) {
-        myData.Weight = Weight;
-        break;  // Exit the loop early once weight is received
-      }
+  //     // Try reading weight
+  //     float Weight = getWeight();
+  //     if (Weight > 0) {
+  //       myData.Weight = Weight;
+  //       break;  // Exit the loop early once weight is received
+  //     }
 
-      delay(100);  // Small delay to avoid hammering sensors
-    }
-  }
+  //     delay(100);  // Small delay to avoid hammering sensors
+  //   }
+  // }
 
 
   // Send data (RFID + Weight) to camera
-  if ((flagCapture == false) && myData.Weight == 0) {
+ // if ((flagCapture == false) && myData.Weight == 0) {
     //strcpy(myData.RFID, "IMAGEONLY"); // Commented for testing only
-    SendDataToCamera();
-  }
+    //SendDataToCamera();
+  //}
 
-  if ((flagCapture == false) && myData.Weight > 0) {
-    SendDataToCamera();
-  }
+  //if ((flagCapture == false) && myData.Weight > 0) {
+    //SendDataToCamera();
+  //}
 
 
 
   delay(1000);  // Optional: give ESP some breathing time
-  if (distance <= 30) {
-    distance= getDistance();
-    if (distance > 30) {
-      flagCapture = true;
-      delay(40);
-    }
-  }
+  // if (distance <= 30) {
+  //   distance= getDistance();
+  //   if (distance > 30) {
+  //     flagCapture = true;
+  //     delay(40);
+  //   }
+  // }
 }
+
+
+
