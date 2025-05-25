@@ -50,9 +50,10 @@
 #define PCLK_GPIO_NUM 22
 
 int pictureNumber = 0;
-volatile bool dataReceived = false;
-volatile bool TakeImage = false;
- String ImagePath;
+bool dataReceived = false;
+bool TakeImage = false;
+bool SendImage = false;
+String ImagePath;
 // Define a data structure
 typedef struct struct_message {
   char RFID[32];
@@ -62,31 +63,102 @@ typedef struct struct_message {
 // Create a structured object
 struct_message myData;
 
-const char* ssid = "MULWELI";
+const char* ssid = "PHILA";
 const char* password = "ESPTEST1";
 unsigned long epochTime;
+String cleanRFID(String raw) {
+  String cleaned = "";
+  for (int i = 0; i < raw.length(); i++) {
+    char c = raw.charAt(i);
+    if (isPrintable(c)) {
+      cleaned += c;
+    }
+  }
+  return cleaned;
+}
 
-void TransferToServer() {
-  const char* serverUrl = "http://192.168.137.163:8000/add/";
-  //const char* host = "192.168.137.52";
+void FullDataToServer() {
+  const char* serverUrl = "http://192.168.137.221:8000/add/";
   const int httpPort = 8000;
   //--------------------------------------------------
   epochTime = getTime();
-  //SD_MMC.begin(true);  // Or SD.begin()
   HTTPClient http;
 
   String boundary = "----ESP32FormBoundary";
-  //String jsonPart = "{\"name\":\"ESP32\",\"status\":\"OK\"}";
+  String RFIDTrim = String(myData.RFID);
+  RFIDTrim.trim();
+  RFIDTrim= cleanRFID(RFIDTrim);
+  String ID = (RFIDTrim.length() == 0) ? "null" : RFIDTrim;
 
-  String ID = (strcmp(myData.RFID, "") == 0)? "null":myData.RFID;
 
-  String jsonPart = "{\"timestamp\": " + String(epochTime) + ", \"id\": " +  ID+
-  ", \"weight\": " + String(myData.Weight) + "}";
+  String jsonPart = "{\"timestamp\": " + String(epochTime) + ", \"id\": \"" + ID + "\", \"weight\": " + String(myData.Weight) + "}";
 
 
   // Begin request
   http.begin(serverUrl);
   http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+http.addHeader("X-API-KEY", "QWERTY");
+  // Start building multipart body
+  String bodyStart = "--" + boundary + "\r\n";
+  bodyStart += "Content-Disposition: form-data; name=\"data\"\r\n";
+  bodyStart += "Content-Type: application/json\r\n\r\n";
+  bodyStart += jsonPart + "\r\n";
+
+  // Prepare image part
+  String imageHeader = "--" + boundary + "\r\n";
+  imageHeader += "Content-Disposition: form-data; name=\"picture\"; filename=" + ImagePath + "\r\n";
+  imageHeader += "Content-Type: image/jpeg\r\n\r\n";
+
+  String bodyEnd = "\r\n--" + boundary + "--\r\n";
+
+  // Open image file (replace with camera buffer if needed)
+  Serial.println(ImagePath);
+  SD_MMC.begin();
+  fs::FS& fs = SD_MMC;
+  File imageFile = fs.open(ImagePath.c_str(), FILE_READ);
+
+  if (!imageFile || imageFile.isDirectory()) {
+    Serial.println("Failed to open image: " + ImagePath);
+  } else {
+    Serial.println("Opened image: " + ImagePath);
+    //Now imageFile can be used (e.g., streamed for HTTP POST)
+  }
+
+  size_t imageSize = imageFile.size();
+  char* imageBuffer = (char*)malloc(imageSize);
+  if (!imageBuffer) {
+    Serial.println("Memory allocation failed.");
+    imageFile.close();
+    return;
+  }
+
+  imageFile.readBytes(imageBuffer, imageSize);
+  imageFile.close();
+  String imageString = String(imageBuffer, imageSize);  // Unsafe: may truncate
+  free(imageBuffer);
+
+
+  int httpResponseCode = http.POST(bodyStart + imageHeader + imageString + bodyEnd);
+  Serial.println(String(httpResponseCode));
+  imageFile.close();
+}
+
+void ImageOnlyToServer() {
+  const char* serverUrl = "http://192.168.137.221:8000/add/";
+  const int httpPort = 8000;
+  //--------------------------------------------------
+  epochTime = getTime();
+  HTTPClient http;
+
+  String boundary = "----ESP32FormBoundary";
+  String ID = "null";
+  String jsonPart = "{\"timestamp\": " + String(epochTime) + ", \"id\": \"" + ID + "\", \"weight\": " + "0" + "}";
+
+
+  // Begin request
+  http.begin(serverUrl);
+  http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+  http.addHeader("X-API-KEY", "QWERTY");
 
   // Start building multipart body
   String bodyStart = "--" + boundary + "\r\n";
@@ -96,33 +168,45 @@ void TransferToServer() {
 
   // Prepare image part
   String imageHeader = "--" + boundary + "\r\n";
-  imageHeader += "Content-Disposition: form-data; name=\"picture\"; filename="+ImagePath +"\r\n";
+  imageHeader += "Content-Disposition: form-data; name=\"picture\"; filename=" + ImagePath + "\r\n";
   imageHeader += "Content-Type: image/jpeg\r\n\r\n";
 
   String bodyEnd = "\r\n--" + boundary + "--\r\n";
 
   // Open image file (replace with camera buffer if needed)
- // File imageFile = SPIFFS.open("/photo.jpg", "r");  // Or SD.open()
- Serial.println(ImagePath);
- SD_MMC.begin();
+  // File imageFile = SPIFFS.open("/photo.jpg", "r");  // Or SD.open()
+  Serial.println(ImagePath);
+  SD_MMC.begin();
   fs::FS& fs = SD_MMC;
   File imageFile = fs.open(ImagePath.c_str(), FILE_READ);
 
-if (!imageFile || imageFile.isDirectory()) {
-  Serial.println("Failed to open image: " + ImagePath);
-} else {
-  Serial.println("Opened image: " + ImagePath);
-   //Now imageFile can be used (e.g., streamed for HTTP POST)
-}
+  if (!imageFile || imageFile.isDirectory()) {
+    Serial.println("Failed to open image: " + ImagePath);
+  } else {
+    Serial.println("Opened image: " + ImagePath);
+    //Now imageFile can be used (e.g., streamed for HTTP POST)
+  }
 
-  if (!imageFile) {
-    Serial.println("Failed to open image file");
+  size_t imageSize = imageFile.size();
+  char* imageBuffer = (char*)malloc(imageSize);
+  if (!imageBuffer) {
+    Serial.println("Memory allocation failed.");
+    imageFile.close();
     return;
   }
-  int httpResponseCode = http.POST(bodyStart+imageHeader+bodyEnd);
-imageFile.close();
-  
+
+  imageFile.readBytes(imageBuffer, imageSize);
+  imageFile.close();
+  String imageString = String(imageBuffer, imageSize);  // ⚠️ Unsafe: may truncate
+  free(imageBuffer);
+
+
+  int httpResponseCode = http.POST(bodyStart + imageHeader + imageString + bodyEnd);
+  Serial.println(String(httpResponseCode));
+  imageFile.close();
 }
+
+
 unsigned long getTime() {
   time_t now;
   struct tm timeinfo;
@@ -178,16 +262,23 @@ void OnDataRecv(const esp_now_recv_info_t* info, const uint8_t* incomingData, in
   memcpy(&myData, incomingData, sizeof(myData));
   Serial.print("Data received: ");
   Serial.println(len);
-  Serial.print("RFID Value: ");
-  Serial.println(myData.RFID);
-  Serial.print("Weight Value: ");
-  Serial.println(myData.Weight);
   Serial.println();
-  if (strcmp(myData.RFID, "IMAGE") == 0) {
+  if (strcmp(myData.RFID, "IMAGECAPTURE") == 0) {
     Serial.println("Image Capture Triggered");
     TakeImage = true;
+  }
 
-  } else {
+
+  if (strcmp(myData.RFID, "IMAGEONLY") == 0) {
+
+    SendImage = true;
+  }
+
+  if (strcmp(myData.RFID, "IMAGECAPTURE") != 0 && strcmp(myData.RFID, "IMAGEONLY") != 0) {
+    Serial.print("RFID Value: ");
+    Serial.println(myData.RFID);
+    Serial.print("Weight Value: ");
+    Serial.println(myData.Weight);
     dataReceived = true;
   }
 }
@@ -195,7 +286,7 @@ void OnDataRecv(const esp_now_recv_info_t* info, const uint8_t* incomingData, in
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);  //disable brownout detector
 
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   //Serial.setDebugOutput(true);
   //Serial.println();
@@ -224,11 +315,11 @@ void setup() {
 
   if (psramFound()) {
     config.frame_size = FRAMESIZE_UXGA;  // FRAMESIZE_ + QVGA|CIF|VGA|SVGA|XGA|SXGA|UXGA
-    config.jpeg_quality = 10;
+    config.jpeg_quality = 45;
     config.fb_count = 2;
   } else {
     config.frame_size = FRAMESIZE_SVGA;
-    config.jpeg_quality = 12;
+    config.jpeg_quality = 24;
     config.fb_count = 1;
   }
 
@@ -238,6 +329,8 @@ void setup() {
     Serial.printf("Camera init failed with error 0x%x", err);
     return;
   }
+sensor_t *s = esp_camera_sensor_get();
+s->set_vflip(s, 1);  // Flip image vertically (mirror about x-axis)
 
   //Serial.println("Starting SD Card");
   if (!SD_MMC.begin()) {
@@ -284,8 +377,13 @@ void loop() {
     captureAndSaveImage();
   }
 
+  if (SendImage) {
+    SendImage = false;
+    ImageOnlyToServer();
+  }
+
   if (dataReceived) {
     dataReceived = false;  // clear the flag
-    TransferToServer();
+    FullDataToServer();
   }
 }
