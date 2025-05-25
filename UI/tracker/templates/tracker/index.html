@@ -1,0 +1,245 @@
+{% extends "tracker/base.html" %}
+
+{% block body %}
+    <div class="container-fluid">
+        <h3 class="m-4">Detection LOG</h3>
+        <div class="row">
+            <div class="col-12">
+                {% if measurements %}
+                <div class="card bg-light ms-4 me-4 mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fa-solid fa-clipboard"></i> Weight Measurements
+                        </div>
+                        <div class="d-flex gap-2">
+                            <!-- Combined Filter and Search Form -->
+                            <form class="d-flex gap-2" method="GET" action="">
+                                <input type="date" 
+                                       name="date_filter" 
+                                       class="form-control form-control-sm"
+                                       value="{{ request.GET.date_filter|default:'' }}"
+                                       onchange="this.form.submit()"> <!-- Automatically submit on change -->
+
+                                <select name="status_filter" class="form-select form-select-sm" onchange="this.form.submit()"> <!-- Automatically submit on change -->
+                                    <option value="">All Statuses</option>
+                                    <option value="ok" {% if request.GET.status_filter == 'ok' %}selected{% endif %}>ok</option>
+                                    <option value="warning" {% if request.GET.status_filter == 'warning' %}selected{% endif %}>warning</option>
+                                    <option value="critical" {% if request.GET.status_filter == 'critical' %}selected{% endif %}>critical</option>
+                                </select>
+
+                                <input type="search" 
+                                       name="search" 
+                                       class="form-control form-control-sm" 
+                                       placeholder="Search RFID..."
+                                       value="{{ request.GET.search|default:'' }}">
+
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="fa-solid fa-search"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="measurementTable">
+                                <thead>
+                                    <tr>
+                                        <th scope="col"><i class="fa-solid fa-triangle-exclamation"></i> Status</th>
+                                        <th scope="col"><i class="fa-solid fa-clock"></i> Time Stamp</th>
+                                        <th scope="col"><i class="fa-solid fa-wifi"></i> Source</th>
+                                        <th scope="col"><i class="fa-solid fa-tag"></i> RFID</th>
+                                        <th scope="col"><i class="fa-solid fa-weight-scale"></i> Weight</th>
+                                        <th scope="col"><i class="fa-solid fa-image"></i> Image</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for measurement in measurements %}
+                                    <tr>
+                                        <td>
+                                            {% if measurement.status == 'ok' %}
+                                                <span class="badge bg-success">ok</span>
+                                            {% elif measurement.status == 'warning' %}
+                                                <span class="badge bg-warning">warning</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">critical</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ measurement.timestamp|date:"d M Y H:i:s" }}</td>
+                                        <td>{{ measurement.source }}</td>
+                                        <td><a href="{% url 'penguin_profile' id=measurement.penguin ts=measurement.timestamp %}" style="text-decoration: none; color: #0d6efd;">{{ measurement.penguin }}</a></td>
+                                        <td>{{ measurement.weight }} kg</td>
+                                        <td>
+                                            <img src="{{ measurement.image.url }}" 
+                                                alt="Penguin Image" 
+                                                style="max-width: 100px; max-height: 100px; cursor: pointer;"
+                                                onclick="showImage(this.src)"
+                                                class="penguin-thumbnail">
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination Controls -->
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                          <div>
+                              <button class="btn btn-primary btn-sm" onclick="downloadData()">
+                                  <i class="fa-solid fa-download"></i> Download CSV
+                              </button>
+                          </div>
+                          <div>
+                              <span id="paginationInfo">1-10 of {{ measurements|length }}</span>
+                              <button class="btn btn-outline-secondary btn-sm ms-2" onclick="prevPage()">
+                                  <i class="fa-solid fa-chevron-left"></i>
+                              </button>
+                              <button class="btn btn-outline-secondary btn-sm ms-1" onclick="nextPage()">
+                                  <i class="fa-solid fa-chevron-right"></i>
+                              </button>
+                          </div>
+                        </div>
+                {% else %}
+<div class="alert alert-primary ms-4 me-4">
+    <h5>No measurements found.</h5>
+    <button class="btn btn-secondary btn-sm mt-2" onclick="history.back()">
+        <i class="fa-solid fa-arrow-left"></i> Go Back
+    </button>
+</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+        <!-- Image Modal -->
+        <!-- Update the modal HTML -->
+        <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered modal-lg">
+              <div class="modal-content">
+                  <div class="modal-header">
+                      <h5 class="modal-title" id="imageModalLabel">Captured Image</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body text-center" style="height: 80vh;">
+                      <img id="modalImage" src="" alt="Enlarged Penguin Image" 
+                          style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                  </div>
+              </div>
+          </div>
+        </div>
+
+    
+
+    <!-- Pagination JavaScript -->
+    <script>
+        let currentPage = 1;
+        const rowsPerPage = 10; // Fixed to 10 rows per page
+
+        function updatePagination() {
+            const table = document.getElementById("measurementTable");
+            const rows = table.querySelectorAll("tbody tr");
+            const totalRows = rows.length;
+            const totalPages = Math.ceil(totalRows / rowsPerPage);
+
+            // Handle edge cases
+            if (currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+            if (currentPage < 1) {
+                currentPage = 1;
+            }
+
+            // Hide all rows initially
+            rows.forEach(row => {
+                row.style.display = "none";
+            });
+
+            // Calculate which rows to show
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = Math.min(start + rowsPerPage, totalRows);
+
+            // Show only the rows for the current page
+            for (let i = start; i < end; i++) {
+                rows[i].style.display = "";
+            }
+
+            // Update pagination info text
+            document.getElementById("paginationInfo").innerText = 
+                `${start + 1}-${end} of ${totalRows}`;
+
+            // Update button states
+            document.querySelector('[onclick="prevPage()"]').disabled = currentPage === 1;
+            document.querySelector('[onclick="nextPage()"]').disabled = currentPage >= totalPages;
+        }
+
+        // Image veiwer
+        function showImage(imageSrc) {
+            const modalImage = document.getElementById('modalImage');
+            modalImage.src = imageSrc;
+            
+            // Create and show modal
+            const modal = new bootstrap.Modal(document.getElementById('imageModal'));
+            modal.show();
+            
+            // Remove the onload handler - we'll let CSS handle the sizing
+            modalImage.onload = null;
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                updatePagination();
+            }
+        }
+
+        function nextPage() {
+            const table = document.getElementById("measurementTable");
+            const rows = table.querySelectorAll("tbody tr");
+            const totalPages = Math.ceil(rows.length / rowsPerPage);
+            
+            if (currentPage < totalPages) {
+                currentPage++;
+                updatePagination();
+            }
+        }
+
+        function downloadData() {
+            const table = document.getElementById("measurementTable");
+            const headers = Array.from(table.querySelectorAll("thead th"))
+                .map(th => th.textContent.trim())
+                .join(",");
+            
+            const rows = Array.from(table.querySelectorAll("tbody tr"));
+            const csvContent = rows.map(row => {
+                return Array.from(row.cells)
+                    .map(cell => {
+                        // If cell contains an image, get its URL
+                        const img = cell.querySelector('img');
+                        if (img) {
+                            return `"${img.src}"`;
+                        }
+                        return `"${cell.textContent.trim()}"`;
+                    })
+                    .join(",");
+            }).join("\n");
+
+            // Combine headers and content
+            const fullCSV = `${headers}\n${csvContent}`;
+            
+            // Create and trigger download
+            const blob = new Blob([fullCSV], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('hidden', '');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'penguin_measurements.csv');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        // Initialize pagination when the page loads
+        document.addEventListener("DOMContentLoaded", () => {
+            updatePagination();
+        });
+    </script>
+{% endblock %}

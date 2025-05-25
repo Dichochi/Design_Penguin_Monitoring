@@ -1,0 +1,350 @@
+{% extends "tracker/base.html" %}
+
+{% block body %}
+<div class="container-fluid mt-4">
+    <h3 class="mb-4">
+        <i class="fa-solid fa-chart-line"></i> Statistics Dashboard
+    </h3>
+
+    <!-- Top Row - Quick Stats -->
+    <div class="row mb-4">
+        <!-- Total Penguins Card -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Tagged Penguins</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_penguins }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa-solid fa-penguin fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Penguins Card -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Active (Last 24h)</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ recent_measurements_count }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa-solid fa-signal fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Measurements Card -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Total Measurements
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_measurements }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa-solid fa-weight-scale fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Average Weight Card -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Average Weight</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ avg_weight|floatformat:3|default:'0' }} kg</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fa-solid fa-scale-balanced fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Middle Row - Charts -->
+    <div class="row mb-4">
+        <!-- Replace the Population Overview card with Downloads card -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Downloads</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Tagged Penguins Download Card -->
+                        <div class="col-md-4">
+                            <div class="card border-left-primary mb-3">
+                                <div class="card-body">
+                                    <h5 class="card-title text-primary">Tagged Penguins</h5>
+                                    <p class="card-text small">Download information about all tagged penguins</p>
+                                    <button class="btn btn-primary btn-sm w-100" onclick="downloadTaggedPenguins()">
+                                        <i class="fa-solid fa-download me-2"></i>Download CSV
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Measurements Download Card -->
+                        <div class="col-md-4">
+                            <div class="card border-left-success mb-3">
+                                <div class="card-body">
+                                    <h5 class="card-title text-success">Measurements</h5>
+                                    <p class="card-text small">Download total population measurement data</p>
+                                    <button class="btn btn-success btn-sm w-100" onclick="downloadMeasurements()">
+                                        <i class="fa-solid fa-download me-2"></i>Download CSV
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pictures Download Card -->
+                        <div class="col-md-4">
+                            <div class="card border-left-info mb-3">
+                                <div class="card-body">
+                                    <h5 class="card-title text-info">Pictures</h5>
+                                    <p class="card-text small">Download all detection pictures</p>
+                                    <button class="btn btn-info btn-sm w-100" onclick="downloadPictures()">
+                                        <i class="fa-solid fa-download me-2"></i>Download ZIP
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Distribution Card -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Weight Distribution</h6>
+                    <div class="dropdown no-arrow">
+                        <button class="btn btn-link btn-sm dropdown-toggle" type="button" id="weightDistributionDropdown" 
+                                data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fa-solid fa-calendar"></i>
+                            <span id="weightTimeRange">Last Year</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="weightDistributionDropdown">
+                            <li><button type="button" class="dropdown-item" onclick="updateWeightDistribution('day')">Last 24 Hours</button></li>
+                            <li><button type="button" class="dropdown-item" onclick="updateWeightDistribution('week')">Last Week</button></li>
+                            <li><button type="button" class="dropdown-item" onclick="updateWeightDistribution('month')">Last Month</button></li>
+                            <li><button type="button" class="dropdown-item" onclick="updateWeightDistribution('year')">Last Year</button></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-pie">
+                        <!-- Another plot can go here -->
+                        <canvas id="weightDistribution"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Row - Recent Activity -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary"><a href="{% url 'index' %}">Recent Activity</a></h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th scope="col"><i class="fa-solid fa-triangle-exclamation"></i> Status</th>
+                                    <th scope="col"><i class="fa-solid fa-clock"></i> Time Stamp</th>
+                                    <th scope="col"><i class="fa-solid fa-wifi"></i> Source</th>
+                                    <th scope="col"><i class="fa-solid fa-tag"></i> RFID</th>
+                                    <th scope="col"><i class="fa-solid fa-weight-scale"></i> Weight</th>
+                                    <th scope="col"><i class="fa-solid fa-image"></i> Image</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for measurement in first_five %}
+                                <tr>
+                                    <td>
+                                        {% if measurement.status == 'ok' %}
+                                            <span class="badge bg-success">ok</span>
+                                        {% elif measurement.status == 'warning' %}
+                                            <span class="badge bg-warning">warning</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">critical</span>
+                                        {% endif %}
+                                </td>
+                                    <td>{{ measurement.timestamp|date:"d M Y H:i:s" }}</td>
+                                    <td>{{ measurement.source }}</td>
+                                    <td><a href="{% url 'penguin_profile' id=measurement.penguin ts=measurement.timestamp %}" style="text-decoration: none; color: #0d6efd;">{{ measurement.penguin }}</a></td>
+                                    <td>{{ measurement.weight }} kg</td>
+                                    <td>
+                                        <img src="{{ measurement.image.url }}" 
+                                            alt="Penguin Image" 
+                                            style="max-width: 100px; max-height: 100px; cursor: pointer;"
+                                            onclick="showImage(this.src)"
+                                            class="penguin-thumbnail">
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add custom CSS for cards -->
+<style>
+.border-left-primary {
+    border-left: 4px solid var(--bs-primary);
+}
+.border-left-success {
+    border-left: 4px solid var(--bs-success);
+}
+.border-left-info {
+    border-left: 4px solid var(--bs-info);
+}
+.border-left-warning {
+    border-left: 4px solid var(--bs-warning);
+}
+.chart-area {
+    position: relative;
+    height: 20rem;
+    width: 100%;
+}
+.chart-pie {
+    position: relative;
+    height: 15rem;
+    width: 100%;
+}
+</style>
+
+<!-- Add JavaScript for charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Update weight distribution function
+function updateWeightDistribution(timeRange) {
+    // Update dropdown button text
+    const timeRangeText = {
+        'day': 'Last 24 Hours',
+        'week': 'Last Week',
+        'month': 'Last Month',
+        'year': 'Last Year'
+    }[timeRange];
+    document.getElementById('weightTimeRange').textContent = timeRangeText;
+
+    // Fetch new data
+    fetch(`/api/weight-distribution/${timeRange}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (window.weightChart) {
+                // Update chart data
+                window.weightChart.data.labels = data.bins.map(bin => `${bin} kg`);
+                window.weightChart.data.datasets[0].data = data.counts;
+                window.weightChart.options.plugins.title.text = 
+                    `Weight Distribution (${data.min_weight.toFixed(1)} - ${data.max_weight.toFixed(1)} kg)`;
+                window.weightChart.update();
+            }
+        })
+        .catch(error => console.error('Error fetching weight distribution:', error));
+}
+
+// Initialize charts when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Parse the serialized JSON data
+    const weightData = JSON.parse('{{ weight_distribution_json|safe }}');
+
+    // Initialize weight distribution chart
+    const weightCtx = document.getElementById('weightDistribution').getContext('2d');
+    const weightChart = new Chart(weightCtx, {
+        type: 'bar',
+        data: {
+            labels: weightData.bins.map(bin => `${bin} kg`),
+            datasets: [{
+                label: 'Number of Measurements',
+                data: weightData.counts,
+                backgroundColor: 'rgba(255, 193, 7, 0.5)',
+                borderColor: 'rgb(255, 193, 7)',
+                borderWidth: 1,
+                borderRadius: 4,
+                barPercentage: 0.9,
+                categoryPercentage: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: `Weight Distribution (${weightData.min_weight.toFixed(1)} - ${weightData.max_weight.toFixed(1)} kg)`
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return `Weight Range: ${context[0].label}`;
+                        },
+                        label: function(context) {
+                            return `Count: ${context.raw}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1,
+                        precision: 0
+                    },
+                    title: {
+                        display: true,
+                        text: 'Number of Measurements'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Weight Range'
+                    }
+                }
+            }
+        }
+    });
+
+    // Store chart instance for later use
+    window.weightChart = weightChart;
+});
+</script>
+{% endblock %}

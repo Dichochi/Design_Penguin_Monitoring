@@ -1,0 +1,517 @@
+{% extends "tracker/base.html" %}
+
+{% block body %}
+<div class="container mt-5">
+    <!-- First row with profile and charts -->
+    <div class="row mb-4">
+        <!-- Left Card -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <img src="{{ measurement.image.url }}" alt="Penguin Image" style="max-width: 300px; max-height: 400px;">
+                    </div>
+                    <h5 class="card-title">
+                        {{penguin.id}}
+                    </h5>
+                </div>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item"><i class="fa-solid fa-heart-pulse"></i> Current Status: 
+                        {% if currentStatus == 'ok' %}
+                            <span class="badge bg-success">ok</span>
+                        {% elif currentStatus == 'unseen' %}
+                            <span class="badge bg-warning">unseen</span>
+                        {% else %}
+                            <span class="badge bg-danger">missing</span>
+                        {% endif %}
+                    </li>
+                    <li class="list-group-item"><i class="fa-solid fa-clock"></i> Last Seen: {{measurement.timestamp|date:"d M Y, H:i:s"}}</li>
+                    <li class="list-group-item"><i class="fa-solid fa-weight-scale"></i> Current Weight: {{measurement.weight}} kg</li>
+                    <li class="list-group-item"><i class="fa-solid fa-file-arrow-down"></i> Number of detections: {{weight_stats.count}}</li>
+                    <li class="list-group-item"><i class="fa-solid fa-chart-line"></i> Weight Change (30d):
+                    {%if weight_change %}
+                    {{ weight_change|floatformat:2}} kg
+                    {%else%}
+                    N/A
+                    {%endif%}
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Right Cards -->
+        <div class="col-md-8">
+            <!-- Weight History Card -->
+            <div class="card mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Weight History</h6>
+                    <!-- Update the dropdown menu -->
+                    <div class="dropdown">
+                        <button class="btn btn-link btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fa-solid fa-calendar"></i> <span id="selectedRange">Last Month</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="updateTimeRange('week')">Last Week</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="updateTimeRange('month')">Last Month</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="updateTimeRange('year')">Last Year</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="updateTimeRange('all')">All Time</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area" style="height: 250px;">  <!-- Changed from default height to 600px -->
+                        <canvas id="weightChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics Cards - Replace the existing col-md-6 divisions -->
+            <div class="row mb-4">
+                <!-- Weight Statistics Card -->
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Weight Statistics</h6>
+                        </div>
+                        <!-- Weight Statistics Card body -->
+                        <div class="card-body">
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <i class="fa-solid fa-calculator me-2"></i>
+                                    Average Weight: {{ weight_stats.avg_weight|floatformat:2|default:'N/A' }} kg
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fa-solid fa-arrow-up me-2"></i>
+                                    Max Weight: {{ weight_stats.max_weight|floatformat:2|default:'N/A' }} kg
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fa-solid fa-arrow-down me-2"></i>
+                                    Min Weight: {{ weight_stats.min_weight|floatformat:2|default:'N/A' }} kg
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activity Pattern Card -->
+                <div class="col-md-7">
+                    <div class="card h-100">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Activity Pattern</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-area" style="height: 200px;">
+                                <canvas id="activityChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Second row for detection log -->
+    <div class="row">
+        <div class="col-12">
+            <!-- Detection Log Card -->
+            <div class="card mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Detection Log</h6>
+                    <button onclick="downloadLog()" class="btn btn-success btn-sm">
+                        <i class="fa-solid fa-download"></i> Download CSV
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col"><i class="fa-solid fa-triangle-exclamation"></i> Status</th>
+                                    <th scope="col"><i class="fa-solid fa-clock"></i> Time Stamp</th>
+                                    <th scope="col"><i class="fa-solid fa-wifi"></i> Source</th>
+                                    <th scope="col"><i class="fa-solid fa-weight-scale"></i> Weight</th>
+                                    <th scope="col"><i class="fa-solid fa-image"></i> Image</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for measurement in measurements %}
+                                <tr>
+                                    <td>
+                                        {% if measurement.status == 'ok' %}
+                                            <span class="badge bg-success">ok</span>
+                                        {% elif measurement.status == 'warning' %}
+                                            <span class="badge bg-warning">warning</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">critical</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ measurement.timestamp|date:"d M Y H:i:s" }}</td>
+                                    <td>{{ measurement.source }}</td>
+                                    <td>{{ measurement.weight }} kg</td>
+                                    <td>
+                                        <img src="{{ measurement.image.url }}" 
+                                             alt="Detection Image" 
+                                             style="max-width: 100px; max-height: 100px; cursor: pointer;"
+                                             onclick="showImage(this.src)"
+                                             class="detection-thumbnail">
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Add pagination controls -->
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div>
+                            <span>Rows per page:</span>
+                            <select class="form-select form-select-sm d-inline-block ms-2" style="width: auto;" id="rowsPerPage" onchange="updatePagination()">
+                                <option value="5" selected>5</option>
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                            </select>
+                        </div>
+                        <div>
+                            <span id="paginationInfo"></span>
+                            <button class="btn btn-outline-secondary btn-sm ms-2" onclick="prevPage()">
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm ms-1" onclick="nextPage()">
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add JavaScript for charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let weightChart = null;
+let allMeasurements = null;
+let currentPage = 1;
+let rowsPerPage = 5;
+
+function updateTimeRange(range) {
+    const now = new Date();
+    let startDate = new Date();
+    
+    switch(range) {
+        case 'week':
+            startDate.setDate(now.getDate() - 7);
+            document.getElementById('selectedRange').textContent = 'Last Week';
+            break;
+        case 'month':
+            startDate.setMonth(now.getMonth() - 1);
+            document.getElementById('selectedRange').textContent = 'Last Month';
+            break;
+        case 'year':
+            startDate.setFullYear(now.getFullYear() - 1);
+            document.getElementById('selectedRange').textContent = 'Last Year';
+            break;
+        case 'all':
+            startDate = new Date(0); // Beginning of time
+            document.getElementById('selectedRange').textContent = 'All Time';
+            break;
+    }
+
+    const filteredData = allMeasurements.filter(m => {
+        const measurementDate = new Date(m.date);
+        return measurementDate >= startDate && measurementDate <= now;
+    });
+
+    // Update chart with filtered data
+    weightChart.data.labels = filteredData.map(m => new Date(m.date).toLocaleDateString());
+    weightChart.data.datasets[0].data = filteredData.map(m => m.weight);
+    weightChart.options.plugins.title.text = `Weight History - ${document.getElementById('selectedRange').textContent}`;
+    weightChart.update();
+}
+
+// Weight History Chart
+function initWeightChart(data) {
+    const ctx = document.getElementById('weightChart').getContext('2d');
+    
+    if (weightChart) {
+        weightChart.destroy();
+    }
+    
+    weightChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.dates.map(date => new Date(date).toLocaleDateString()),
+            datasets: [{
+                label: 'Weight (kg)',
+                data: data.weights,
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1,
+                fill: false,
+                pointRadius: 5,
+                pointHoverRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Last 30 Weight Measurements'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Weight: ${context.parsed.y} kg`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Weight (kg)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Date'
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Activity Pattern Chart - New chart for activity pattern
+function initActivityChart(data) {
+    const ctx = document.getElementById('activityChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar', // Change chart type to 'bar'
+        data: {
+            labels: data.labels || [],
+            datasets: [{
+                label: 'Weekly Detections',
+                data: data.counts || [],
+                backgroundColor: 'rgba(75, 192, 192, 0.5)', // Bar color
+                borderColor: 'rgb(75, 192, 192)', // Bar border color
+                borderWidth: 1,
+                borderRadius: 4 // Rounded bar corners
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false // Hide legend
+                },
+                title: {
+                    display: true,
+                    text: 'Weekly Activity Pattern (Last 30 Days)' // Chart title
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return `Week of ${context[0].label}`;
+                        },
+                        label: function(context) {
+                            return `${context.raw} detections`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Number of Detections'
+                    },
+                    ticks: {
+                        stepSize: 1,
+                        precision: 0
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Week Starting'
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Pagination functions
+function updatePagination() {
+    const table = document.querySelector('.table');
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const totalRows = rows.length;
+    rowsPerPage = parseInt(document.getElementById('rowsPerPage').value);
+    const totalPages = Math.ceil(totalRows / rowsPerPage);
+    
+    // Adjust current page if needed
+    if (currentPage > totalPages) {
+        currentPage = totalPages;
+    }
+    
+    const start = (currentPage - 1) * rowsPerPage;
+    const end = Math.min(start + rowsPerPage, totalRows);
+    
+    // Hide all rows
+    rows.forEach(row => row.style.display = 'none');
+    
+    // Show rows for current page
+    rows.slice(start, end).forEach(row => row.style.display = '');
+    
+    // Update pagination info
+    document.getElementById('paginationInfo').textContent = 
+        `${start + 1}-${end} of ${totalRows}`;
+    
+    // Update button states
+    const prevButton = document.querySelector('button[onclick="prevPage()"]');
+    const nextButton = document.querySelector('button[onclick="nextPage()"]');
+    prevButton.disabled = currentPage === 1;
+    nextButton.disabled = currentPage === totalPages;
+}
+
+function nextPage() {
+    const table = document.querySelector('.table');
+    const totalPages = Math.ceil(table.querySelectorAll('tbody tr').length / rowsPerPage);
+    
+    if (currentPage < totalPages) {
+        currentPage++;
+        updatePagination();
+    }
+}
+
+function prevPage() {
+    if (currentPage > 1) {
+        currentPage--;
+        updatePagination();
+    }
+}
+
+// Initialize charts when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Get measurement data from the table
+    const table = document.querySelector('.table');
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    
+    allMeasurements = rows.map(row => ({
+        date: row.cells[1].textContent,
+        weight: parseFloat(row.cells[3].textContent)
+    }));
+    
+    const weightData = {
+        dates: allMeasurements.map(m => m.date),
+        weights: allMeasurements.map(m => m.weight)
+    };
+    
+    initWeightChart(weightData);
+    updateTimeRange('month'); // Default to last month view
+    
+    // Parse the serialized JSON data
+    const weeklyCounts = JSON.parse('{{ weekly_counts_json|safe }}');
+
+    // Prepare data for the chart
+    const weeklyData = {
+        labels: weeklyCounts.map(item => new Date(item.week_start).toLocaleDateString()),
+        counts: weeklyCounts.map(item => item.count)
+    };
+
+    // Initialize the Activity Pattern chart
+    initActivityChart(weeklyData);
+    updatePagination();
+});
+
+function downloadLog() {
+    const table = document.querySelector('.table');
+    let csv = 'Status,Time Stamp,Source,Weight (kg),Image URL\n';
+    
+    // Get all rows, not just visible ones
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const status = row.cells[0].querySelector('.badge').textContent;
+        const timestamp = row.cells[1].textContent;
+        const source = row.cells[2].textContent;
+        const weight = row.cells[3].textContent;
+        const imageUrl = row.cells[4].querySelector('img').src;
+        csv += `"${status}","${timestamp}","${source}","${weight}","${imageUrl}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('hidden', '');
+    a.setAttribute('href', url);
+    a.setAttribute('download', 'penguin_detection_log.csv');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+function showImage(src) {
+    // Modal for full-size image view
+    const modal = document.createElement('div');
+    modal.style.position = 'fixed';
+    modal.style.top = '0';
+    modal.style.left = '0';
+    modal.style.width = '100%';
+    modal.style.height = '100%';
+    modal.style.backgroundColor = 'rgba(0,0,0,0.8)';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.zIndex = '1000';
+    
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '<i class="fa-solid fa-times"></i>';
+    closeBtn.style.position = 'absolute';
+    closeBtn.style.top = '20px';
+    closeBtn.style.right = '20px';
+    closeBtn.style.backgroundColor = 'transparent';
+    closeBtn.style.border = 'none';
+    closeBtn.style.color = 'white';
+    closeBtn.style.fontSize = '24px';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.style.zIndex = '1001';
+    closeBtn.onclick = (e) => {
+        e.stopPropagation();
+        modal.remove();
+    };
+
+    const img = document.createElement('img');
+    img.src = src;
+    img.style.maxWidth = '90%';
+    img.style.maxHeight = '90%';
+    img.style.objectFit = 'contain';
+    
+    modal.appendChild(closeBtn);
+    modal.appendChild(img);
+    document.body.appendChild(modal);
+
+    // Close on modal background click
+    modal.onclick = () => modal.remove();
+    // Prevent image click from closing modal
+    img.onclick = (e) => e.stopPropagation();
+}
+</script>
+{% endblock %}

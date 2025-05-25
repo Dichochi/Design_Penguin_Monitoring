@@ -1,0 +1,3 @@
+Justifying Django:
+	1. Django's ORM (Object relational mapping) -> used for automatically mapping python code into a database table #Research
+	   Usefull for plug and play databases

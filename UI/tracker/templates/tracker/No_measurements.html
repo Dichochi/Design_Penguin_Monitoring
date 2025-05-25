@@ -1,0 +1,15 @@
+{% extends "tracker/base.html" %}
+
+{% block body %}
+<div class="container">
+    <div class="row min-vh-100 align-items-center">
+        <div class="col-12 text-center">
+            <h1 class="display-4 mb-4">Data unavailable for {{ penguin_id }}</h1>
+            <p class="lead text-muted mb-5">No measurements found for this penguin.</p>
+            <button onclick="history.back()" class="btn btn-primary">
+                <i class="fa-solid fa-arrow-left me-2"></i>Go Back
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}

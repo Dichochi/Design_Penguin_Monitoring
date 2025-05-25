@@ -1,0 +1,127 @@
+{% extends "tracker/base.html" %}
+
+{% block body %}
+<div class="container mt-5">
+    <!-- Project Overview Section -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <h2 class="card-title mb-4">About FlipperBase</h2>
+            <div class="row">
+                <div class="col-md-8">
+                    <p class="lead">An automated penguin weight monitoring system designed to assist researchers in tracking African Penguin populations at Stony Point, Cape Town.</p>
+                    <p>This project is developed by Group X as part of the EEE4113F course, aimed at supporting conservation efforts for the endangered African Penguin (Spheniscus demersus).</p>
+                    <div class="mt-4">
+                        <h5><i class="fa-solid fa-circle-info"></i> Project Objectives</h5>
+                        <ul>
+                            <li>Automate weight data collection of African Penguins</li>
+                            <li>Provide researchers with reliable monitoring tools</li>
+                            <li>Support behavioral pattern analysis during molting periods</li>
+                            <li>Contribute to penguin conservation efforts</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/5/56/African_Penguin_%28Spheniscus_demersus%29.jpg" 
+                         class="img-fluid rounded" 
+                         alt="African Penguin">
+                    <small class="d-block text-muted mt-2">African Penguin at Stony Point</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Team Section -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <h3 class="card-title mb-4">Our Team</h3>
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <div class="text-center">
+                        <i class="fa-solid fa-user-circle fa-4x mb-3 text-primary"></i>
+                        <h5>Person1</h5>
+                        <p class="text-muted">Hardware Development</p>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <div class="text-center">
+                        <i class="fa-solid fa-user-circle fa-4x mb-3 text-primary"></i>
+                        <h5>Person2</h5>
+                        <p class="text-muted">Software Integration</p>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <div class="text-center">
+                        <i class="fa-solid fa-user-circle fa-4x mb-3 text-primary"></i>
+                        <h5>Person3</h5>
+                        <p class="text-muted">Data Analytics</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Technical Details -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <h3 class="card-title mb-4">Technical Overview</h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fa-solid fa-microchip"></i> Hardware Components</h5>
+                    <ul>
+                        <li>Weight sensors and load cells</li>
+                        <li>RFID reader for penguin identification</li>
+                        <li>Microcontroller for data processing</li>
+                        <li>Weather-resistant enclosure</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h5><i class="fa-solid fa-code"></i> Software Stack</h5>
+                    <ul>
+                        <li>Django web framework</li>
+                        <li>Bootstrap 5 for responsive design</li>
+                        <li>SQLite database for data storage</li>
+                        <li>Chart.js for data visualization</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resources Section -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <h3 class="card-title mb-4">Additional Resources</h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fa-solid fa-book"></i> Learn More</h5>
+                    <ul>
+                        <li><a href="https://www.sanbi.org/animal/african-penguin/" target="_blank">SANBI - African Penguin</a></li>
+                        <li><a href="https://www.saao.ac.za/stony-point/" target="_blank">Stony Point Conservation Area</a></li>
+                        <li><a href="https://www.iucnredlist.org/species/22697810/157423033" target="_blank">IUCN Red List - African Penguin</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h5><i class="fa-solid fa-hands-helping"></i> Get Involved</h5>
+                    <ul>
+                        <li><a href="https://sanccob.co.za/" target="_blank">SANCCOB - Seabird Conservation</a></li>
+                        <li><a href="https://www.birdlife.org.za/" target="_blank">BirdLife South Africa</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border: none;
+    transition: transform 0.2s;
+}
+.card:hover {
+    transform: translateY(-5px);
+}
+.fa-4x {
+    font-size: 4em;
+}
+</style>
+{% endblock %}
