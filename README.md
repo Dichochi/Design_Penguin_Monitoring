@@ -6,7 +6,6 @@ This project is centred around the development and design of a Penguin Monitorin
 ## Structure
 * Mechanical Subsystem: The housing and placement of the hardware components
 * Electrical Subsystem: This is focused on integrating all the hardware components in the system an d communicating with the server. 
-* Firmware: All the software was developedin arduino with some simulations done in Matlab and SolidWorks.
 * User interface
 
 ## Installation
