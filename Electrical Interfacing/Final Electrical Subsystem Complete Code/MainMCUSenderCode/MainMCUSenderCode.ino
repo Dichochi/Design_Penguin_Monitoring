@@ -195,7 +195,7 @@ float getFirstWeight() {
 float getFinalWeight() {
   float AverageWeight = 0;
   uint8_t Weightsamples = 0;
-  ema = getFirstWeight();
+  //ema = getFirstWeight();
   while (Weightsamples <= 26) {
     delay(10);
     //getWeight();
@@ -205,9 +205,9 @@ float getFinalWeight() {
     if (RFIDReading.length() >= 8) {
       strcpy(myData.RFID, RFIDReading.c_str());
     }
-   // AverageWeight = ema + AverageWeight;
-    AverageWeight = getFirstWeight()+ AverageWeight;
-       Weightsamples += 1;
+    // AverageWeight = ema + AverageWeight;
+    AverageWeight = getFirstWeight() + AverageWeight;
+    Weightsamples += 1;
     // if (ema != 0) {
 
     // } else {
